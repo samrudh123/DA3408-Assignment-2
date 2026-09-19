@@ -27,7 +27,7 @@ def main():
 
     shard_dir = os.environ.get("SHARD_DIR", "shards")
     path = os.path.join(shard_dir, f"shard_{index}.csv")
-    hold = int(os.environ.get("HOLD_SECONDS", "25"))
+    hold = int(os.environ.get("HOLD_SECONDS", "5"))
 
     with open(path, newline="") as f:
         rows = list(csv.DictReader(f))

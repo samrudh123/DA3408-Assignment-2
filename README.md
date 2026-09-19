@@ -192,7 +192,7 @@ kubectl apply -f job.yaml
 kubectl get pods -o wide -w
 ```
 
-Each pod holds for `HOLD_SECONDS` (25s) so the concurrent wave is observable — without it
+Each pod holds for `HOLD_SECONDS` (5s) so the concurrent wave is observable — without it
 the pods finish faster than the watch can show them running together.
 
 ### Collect results through the Kubernetes API
@@ -241,6 +241,14 @@ The counts match what `generate_shards.py` printed at build time.
 ```bash
 kubectl delete -f job.yaml
 ```
+
+To tear the cluster down entirely:
+
+```bash
+minikube delete --all
+```
+
+Question 4 reuses this same cluster, so leave it running if you are continuing.
 
 ## Question 4 — Kubernetes Deployment
 
