@@ -127,10 +127,10 @@ Observed:
 
 | Call | `X-Cache` | `X-Response-Time-Ms` |
 |---|---|---|
-| 1st | `MISS` | 7.295 |
-| 2nd | `HIT`  | 0.420 |
+| 1st | `MISS` | 3.068 |
+| 2nd | `HIT`  | 0.152 |
 
-Both returned `{"label":"spam"}` — about a 17x speedup with an identical answer.
+Both returned `{"label":"spam"}` — about a 20x speedup with an identical answer.
 
 ### Confirming the cache and the networking
 
@@ -227,14 +227,14 @@ Observed:
 
 ```
 SHARD  TOTAL   INVALID   NODE                  POD
-0      100     8         minikube-m02          signup-validation-0-jtqhk
-1      100     12        minikube              signup-validation-1-sldh6
-2      100     6         minikube-m02          signup-validation-2-tfmbm
-3      100     20        minikube-m02          signup-validation-3-mf86j
-4      100     10        minikube-m02          signup-validation-4-xt48n
-5      100     17        minikube              signup-validation-5-fkh99
-6      100     6         minikube-m02          signup-validation-6-rwlr6
-7      100     11        minikube-m02          signup-validation-7-pmzmn
+0      100     8         minikube-m02          signup-validation-0-b4ssn
+1      100     12        minikube-m02          signup-validation-1-px6mx
+2      100     6         minikube              signup-validation-2-t52tz
+3      100     20        minikube-m02          signup-validation-3-j6qsz
+4      100     10        minikube-m02          signup-validation-4-nw5tq
+5      100     17        minikube-m02          signup-validation-5-zwzgm
+6      100     6         minikube              signup-validation-6-vhs2n
+7      100     11        minikube-m02          signup-validation-7-zrzld
 
 shards=8  invalid_total=90
 ```
@@ -295,12 +295,12 @@ kubectl get pods -l app=spam-api -o wide
 
 ```
 # before
-spam-api-74c9f66bb5-555b5   1/1   Running   0   3m58s   10.244.0.18   minikube
-spam-api-74c9f66bb5-sj2vq   1/1   Running   0   4m12s   10.244.1.24   minikube-m02
+spam-api-74c9f66bb5-mv4sn   1/1   Running   0   65s   10.244.1.2   minikube-m02
+spam-api-74c9f66bb5-l2bfp   1/1   Running   0   65s   10.244.0.3   minikube
 
-# after deleting -555b5
-spam-api-74c9f66bb5-sj2vq   1/1   Running   0   4m23s   10.244.1.24   minikube-m02
-spam-api-74c9f66bb5-zs9hn   0/1   Running   0   11s     10.244.0.19   minikube
+# after deleting -l2bfp
+spam-api-74c9f66bb5-mv4sn   1/1   Running   0   65s   10.244.1.2   minikube-m02
+spam-api-74c9f66bb5-wzccl   0/1   Running   0   9s    10.244.0.4   minikube
 ```
 
 The replacement appears within seconds, keeping the same ReplicaSet name prefix. To see
@@ -311,8 +311,8 @@ kubectl get events --field-selector reason=SuccessfulCreate --sort-by=.lastTimes
 ```
 
 ```
-4m9s   Normal   SuccessfulCreate   replicaset/spam-api-74c9f66bb5   Created pod: spam-api-74c9f66bb5-555b5
-11s    Normal   SuccessfulCreate   replicaset/spam-api-74c9f66bb5   Created pod: spam-api-74c9f66bb5-zs9hn
+82s   Normal   SuccessfulCreate   replicaset/spam-api-74c9f66bb5   Created pod: spam-api-74c9f66bb5-l2bfp
+26s   Normal   SuccessfulCreate   replicaset/spam-api-74c9f66bb5   Created pod: spam-api-74c9f66bb5-wzccl
 ```
 
 `--field-selector` filters server-side so only creation events are returned, and `tail -2`
@@ -346,6 +346,17 @@ kubectl set image deployment/spam-api api=spam-api:v2
 kubectl rollout status deployment/spam-api
 wait; cat /tmp/probe.txt
 ```
+
+Observed:
+
+```
+     21 {"status":"ok","version":"v1"}
+      9 {"status":"ok","version":"v2"}
+```
+
+30 of 30 requests succeeded with no `FAIL` line, and both versions answered during the
+same rollout. 30 requests at ~1 s intervals span the 15-20 s rollout, including the final
+old-pod termination.
 
 ### Rollback
 
