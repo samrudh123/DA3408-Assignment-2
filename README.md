@@ -39,7 +39,13 @@ regenerated deterministically by the scripts above and by every Docker build.
 
 ## Prerequisites
 
-- Docker (tested on 29.1.3)
+- Docker (tested on 29.1.3) — Questions 1 and 2
+- minikube (tested on v1.38.1) and kubectl (v1.37.0) — Questions 3 and 4
+- Python 3.11 with `venv`, for the Question 3 results collector
+
+Questions 3 and 4 need a 2-node cluster with 2 allocatable CPUs per node, started with the
+`minikube start` command in the Question 3 section. The host needs at least 4 CPUs free;
+the docker driver is assumed throughout.
 
 ## Question 1 — naive vs. multi-stage images
 
