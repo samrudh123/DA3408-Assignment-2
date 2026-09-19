@@ -7,3 +7,5 @@
 *.tex
 __pycache__/
 *.pyc
+kube-q3/
+shards/

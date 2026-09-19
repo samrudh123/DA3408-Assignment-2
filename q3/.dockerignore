@@ -1,0 +1,8 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.swp
+.venv/
+shards/
+kube-q3/

@@ -149,7 +149,98 @@ docker compose down
 
 ## Question 3 — Kubernetes Indexed Job
 
-_Not yet implemented._
+`q3/` validates 8 shards of synthetic user-signup records. Each shard contains a known,
+seeded number of rows with malformed emails or missing required fields. One pod validates
+exactly one shard, selected by its `JOB_COMPLETION_INDEX`.
+
+This workload is independent of the spam-detection API.
+
+### Cluster
+
+The `--cpus 2` alone does not
+produce 2 allocatable CPUs, minikube's docker driver leaves the node containers unlimited and kubelet
+reports every host CPU as allocatable. Reserving the remainder makes the constraint real:
+
+```bash
+minikube start --nodes 2 --cpus 2 --memory 2048 --driver=docker \
+  --extra-config=kubelet.system-reserved=cpu=$(( $(nproc) - 2 ))
+
+kubectl get nodes -o custom-columns='NODE:.metadata.name,CPU:.status.allocatable.cpu'
+```
+
+`nproc` reports the host's CPU count, so `$(( $(nproc) - 2 ))` reserves everything except
+the 2 CPUs per node.
+
+### Build and load the image
+
+minikube cannot pull from the host daemon, so the image is side-loaded and the manifest
+uses `imagePullPolicy: IfNotPresent`:
+
+```bash
+cd q3
+docker build -t signup-validator:latest .
+minikube image load signup-validator:latest
+```
+
+The shards are generated during the build, so they are reproducible and never committed.
+Running `python generate_shards.py` locally prints the expected invalid-row counts.
+
+### Run the Job and watch concurrency
+
+```bash
+kubectl apply -f job.yaml
+kubectl get pods -o wide -w
+```
+
+Each pod holds for `HOLD_SECONDS` (25s) so the concurrent wave is observable — without it
+the pods finish faster than the watch can show them running together.
+
+### Collect results through the Kubernetes API
+
+```bash
+python3 -m venv kube-q3
+source kube-q3/bin/activate
+pip install -r requirements.txt
+
+python collect_results.py --job signup-validation
+```
+
+If `python3 -m venv` reports that `ensurepip` is unavailable, either install the matching
+`python3.x-venv` package or use `uv`:
+
+```bash
+uv venv --python 3.11 kube-q3
+uv pip install --python kube-q3/bin/python -r requirements.txt
+./kube-q3/bin/python collect_results.py --job signup-validation
+```
+
+Results are read from pod logs via `read_namespaced_pod_log()`, not from a shared volume —
+minikube's default storage provisioner binds a PersistentVolume to one node, and these pods
+run on both.
+
+Observed:
+
+```
+SHARD  TOTAL   INVALID   NODE                  POD
+0      100     8         minikube-m02          signup-validation-0-jtqhk
+1      100     12        minikube              signup-validation-1-sldh6
+2      100     6         minikube-m02          signup-validation-2-tfmbm
+3      100     20        minikube-m02          signup-validation-3-mf86j
+4      100     10        minikube-m02          signup-validation-4-xt48n
+5      100     17        minikube              signup-validation-5-fkh99
+6      100     6         minikube-m02          signup-validation-6-rwlr6
+7      100     11        minikube-m02          signup-validation-7-pmzmn
+
+shards=8  invalid_total=90
+```
+
+The counts match what `generate_shards.py` printed at build time.
+
+### Cleanup
+
+```bash
+kubectl delete -f job.yaml
+```
 
 ## Question 4 — Kubernetes Deployment
 
