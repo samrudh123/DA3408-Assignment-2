@@ -23,6 +23,11 @@ and deployed on Kubernetes. Everything is CPU-only.
 | `q2/app.py` | Same API plus the Redis look-aside cache |
 | `q2/Dockerfile` | Multi-stage build of the cached API |
 | `q2/docker-compose.yml` | The two-service stack: `api` + `cache` |
+| `q3/generate_shards.py` | Writes 8 seeded CSV shards with known invalid-row counts |
+| `q3/validate_shard.py` | Validates the shard named by `JOB_COMPLETION_INDEX` |
+| `q3/collect_results.py` | Reads per-shard results from pod logs via the Kubernetes API |
+| `q3/job.yaml` | The Indexed Job |
+| `q4/deployment.yaml`, `q4/service.yaml` | 2-replica Deployment and NodePort Service |
 | `requirements.txt` | Pinned dependencies (one copy per question folder) |
 | `report.pdf` | The 2-page write-up |
 
@@ -252,4 +257,105 @@ Question 4 reuses this same cluster, so leave it running if you are continuing.
 
 ## Question 4 — Kubernetes Deployment
 
-_Not yet implemented._
+`q4/` deploys the Question 1 API as a Deployment with 2 replicas behind a NodePort Service.
+
+```bash
+minikube start --nodes 2 --cpus 2 --memory 2048 --driver=docker \
+  --extra-config=kubelet.system-reserved=cpu=$(( $(nproc) - 2 ))
+```
+
+### Build, load and apply
+
+```bash
+cd q4
+docker build -t spam-api:v1 .
+minikube image load spam-api:v1
+
+kubectl apply -f deployment.yaml -f service.yaml
+kubectl get pods -o wide -l app=spam-api
+```
+
+### Reach the Service
+
+```bash
+MK=$(minikube ip)
+curl http://$MK:30080/healthz
+curl -X POST http://$MK:30080/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"WIN a FREE iPhone now! Click here: bit.ly/xyz123"}'
+```
+
+### Self-healing
+
+```bash
+kubectl get pods -l app=spam-api -o wide
+kubectl delete pod <one-of-them>
+kubectl get pods -l app=spam-api -o wide
+```
+
+```
+# before
+spam-api-74c9f66bb5-555b5   1/1   Running   0   3m58s   10.244.0.18   minikube
+spam-api-74c9f66bb5-sj2vq   1/1   Running   0   4m12s   10.244.1.24   minikube-m02
+
+# after deleting -555b5
+spam-api-74c9f66bb5-sj2vq   1/1   Running   0   4m23s   10.244.1.24   minikube-m02
+spam-api-74c9f66bb5-zs9hn   0/1   Running   0   11s     10.244.0.19   minikube
+```
+
+The replacement appears within seconds, keeping the same ReplicaSet name prefix. To see
+which controller created it:
+
+```bash
+kubectl get events --field-selector reason=SuccessfulCreate --sort-by=.lastTimestamp | tail -2
+```
+
+```
+4m9s   Normal   SuccessfulCreate   replicaset/spam-api-74c9f66bb5   Created pod: spam-api-74c9f66bb5-555b5
+11s    Normal   SuccessfulCreate   replicaset/spam-api-74c9f66bb5   Created pod: spam-api-74c9f66bb5-zs9hn
+```
+
+`--field-selector` filters server-side so only creation events are returned, and `tail -2`
+trims them to the replacement just triggered. The actor is the ReplicaSet, not the
+Deployment — the Deployment owns the ReplicaSet and delegates replica count to it.
+
+### Rolling update
+
+Change `VERSION` in `q4/app.py` from `v1` to `v2`, then:
+
+```bash
+docker build -t spam-api:v2 .
+minikube image load spam-api:v2
+```
+
+To show the update completed without downtime, the poll has to be running *while* the
+rollout happens — `kubectl rollout status` blocks until it finishes, so polling afterwards
+only ever sees the new version.
+
+To do it in one terminal background the probe:
+
+```bash
+MK=$(minikube ip)
+( for i in $(seq 1 30); do
+    curl -s -w '\n' --max-time 2 http://$MK:30080/healthz || echo FAIL
+    sleep 1
+  done | sort | uniq -c > /tmp/probe.txt ) &
+
+sleep 2
+kubectl set image deployment/spam-api api=spam-api:v2
+kubectl rollout status deployment/spam-api
+wait; cat /tmp/probe.txt
+```
+
+### Rollback
+
+```bash
+kubectl rollout undo deployment/spam-api
+```
+
+### Cleanup
+
+```bash
+kubectl delete -f deployment.yaml -f service.yaml
+minikube delete --all
+```

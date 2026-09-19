@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spam-api
+  labels:
+    app: spam-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: spam-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: spam-api
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: api
+        image: spam-api:v1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        lifecycle:
+          preStop:
+            exec:
+              command: ["sleep", "5"]
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
