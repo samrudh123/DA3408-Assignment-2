@@ -1,7 +1,3 @@
-"""
-Usage:
-    python train_model.py --data spam_dataset.csv --out model.joblib
-"""
 import argparse
 import os
 
