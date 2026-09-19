@@ -4,5 +4,6 @@
 *.log
 *.out
 *.toc
+*.tex
 __pycache__/
 *.pyc
