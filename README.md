@@ -30,9 +30,13 @@ and deployed on Kubernetes. Everything is CPU-only.
 | `q4/deployment.yaml`, `q4/service.yaml` | 2-replica Deployment and NodePort Service |
 | `requirements.txt` | Pinned dependencies (one copy per question folder) |
 | `report.pdf` | The 2-page write-up |
+| `AI_Usage_Disclosure.pdf` | Which files were drafted with AI assistance, and which were not |
 
 Each question folder is a self-contained Docker build context, so `docker build` and
 `docker compose` are run from inside `q1/` or `q2/`.
+
+A generative AI coding assistant was used for parts of this submission;
+`AI_Usage_Disclosure.pdf` lists exactly which files and what was verified independently.
 
 `spam_dataset.csv` and `model.joblib` are **not committed** — they are build outputs,
 regenerated deterministically by the scripts above and by every Docker build.
